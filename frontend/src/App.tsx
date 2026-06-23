@@ -16,30 +16,7 @@ interface ProjectItem {
   progress: number
 }
 
-const INITIAL_PROJECTS: ProjectItem[] = [
-  {
-    id: 'proj-1',
-    name: 'Topografia Morro do Ipê',
-    description: 'Levantamento altimétrico para condomínio residencial.',
-    filesCount: 142,
-    quality: 'high',
-    mode: 'both',
-    status: 'completed',
-    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toLocaleString('pt-BR'),
-    progress: 100,
-  },
-  {
-    id: 'proj-2',
-    name: 'Volume de Pilha de Brita - Pedreira Sul',
-    description: 'Cálculo de volume mensal utilizando câmera RGB.',
-    filesCount: 65,
-    quality: 'medium',
-    mode: 'mesh',
-    status: 'processing',
-    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toLocaleString('pt-BR'),
-    progress: 45,
-  },
-]
+const API_BASE = 'http://localhost:8000';
 
 function App() {
   // State
@@ -50,7 +27,7 @@ function App() {
     quality: 'medium',
     mode: 'both',
   })
-  const [projects, setProjects] = useState<ProjectItem[]>(INITIAL_PROJECTS)
+  const [projects, setProjects] = useState<ProjectItem[]>([])
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   // Upload/Process States
@@ -59,22 +36,25 @@ function App() {
   const [uploadLogs, setUploadLogs] = useState<string[]>([])
   const [uploadStatusText, setUploadStatusText] = useState('')
 
-  // Simulated project updates for mock feeling
+  // Buscar lista de projetos da API real
+  const fetchProjects = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/projects`)
+      if (res.ok) {
+        const data = await res.json()
+        setProjects(data)
+      } else {
+        console.error('Erro na resposta ao carregar projetos:', res.status)
+      }
+    } catch (err) {
+      console.error('Erro de conexão ao buscar projetos:', err)
+    }
+  }
+
+  // Carregar projetos iniciais e manter polling de 5 segundos para atualizações
   useEffect(() => {
-    const interval = setInterval(() => {
-      setProjects((prev) =>
-        prev.map((p) => {
-          if (p.status === 'processing') {
-            const nextProgress = p.progress + Math.floor(Math.random() * 8) + 2
-            if (nextProgress >= 100) {
-              return { ...p, progress: 100, status: 'completed' }
-            }
-            return { ...p, progress: nextProgress }
-          }
-          return p
-        })
-      )
-    }, 5000)
+    fetchProjects()
+    const interval = setInterval(fetchProjects, 5000)
     return () => clearInterval(interval)
   }, [])
 
@@ -92,8 +72,29 @@ function App() {
     setFiles([])
   }
 
-  // Submission handler (Simulates upload and queueing)
-  const handleSubmit = () => {
+  // Deletar Projeto
+  const handleDeleteProject = async (id: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir este projeto? Todos os arquivos físicos serão permanentemente removidos.')) {
+      return
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/projects/${id}`, {
+        method: 'DELETE',
+      })
+      if (res.ok) {
+        setProjects((prev) => prev.filter((p) => p.id !== id))
+      } else {
+        const errData = await res.json()
+        setErrorMsg(errData.detail || 'Erro ao excluir o projeto do servidor.')
+      }
+    } catch (err) {
+      setErrorMsg('Erro de conexão ao tentar excluir o projeto.')
+    }
+  }
+
+  // Enviar formulário e fazer upload dos arquivos reais via HTTP
+  const handleSubmit = async () => {
     if (!settings.name.trim()) {
       setErrorMsg('Por favor, informe o nome do projeto.')
       return
@@ -106,83 +107,104 @@ function App() {
     setErrorMsg(null)
     setIsUploading(true)
     setUploadProgress(0)
-    setUploadLogs(['Iniciando rotina de upload de ativos...'])
-    setUploadStatusText('Conectando ao DroneMapper Host...')
+    setUploadLogs(['Conectando ao servidor para registrar projeto...'])
+    setUploadStatusText('Registrando projeto...')
 
-    // Simulação de passos de upload
-    let progress = 0
-    const logsList = [
-      'Iniciando rotina de upload de ativos...',
-      'Estabelecendo conexão segura (HTTPS)... OK',
-      `Pré-validando integridade de ${files.length} arquivo(s)...`,
-    ]
+    try {
+      // 1. Criar o Projeto
+      const createRes = await fetch(`${API_BASE}/api/projects`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: settings.name,
+          description: settings.description,
+          quality: settings.quality,
+          mode: settings.mode,
+        }),
+      })
 
-    const interval = setInterval(() => {
-      progress += Math.floor(Math.random() * 12) + 3
-      if (progress >= 100) {
-        progress = 100
-        clearInterval(interval)
+      if (!createRes.ok) {
+        const errData = await createRes.json()
+        throw new Error(errData.detail || 'Erro ao registrar o projeto.')
       }
 
-      setUploadProgress(progress)
+      const projectData = await createRes.json()
+      const projectId = projectData.id
 
-      // Adição de logs de simulação por faixa de progresso
-      if (progress > 15 && logsList.length === 3) {
-        logsList.push('Enviando metadados do projeto...')
-        setUploadStatusText('Enviando dados do projeto...')
-      }
-      if (progress > 30 && logsList.length === 4) {
-        logsList.push('Enviando imagens aéreas para o servidor storage...')
-        setUploadStatusText('Carregando binários de mídia (upload)...')
-      }
-      if (progress > 55 && logsList.length === 5) {
-        const containsVideo = files.some(
-          (f) =>
-            f.type.startsWith('video/') ||
-            ['mp4', 'mov', 'avi'].includes(f.name.split('.').pop()?.toLowerCase() || '')
-        )
-        if (containsVideo) {
-          logsList.push('Detecção de vídeo ativada: extraindo metadados de quadros...')
-          logsList.push('Solicitando fila para FFMPEG Frame Extraction...')
-        } else {
-          logsList.push('Detecção de imagens: lendo cabeçalhos EXIF geotagged...')
+      setUploadLogs((prev) => [
+        ...prev,
+        `Projeto criado com sucesso! ID: ${projectId}`,
+        `Iniciando upload de ${files.length} arquivo(s)...`,
+      ])
+      setUploadStatusText('Preparando envio...')
+
+      // 2. Upload de Arquivos reais via XMLHttpRequest para medir progresso
+      const formData = new FormData()
+      files.forEach((file) => {
+        formData.append('files', file)
+      })
+
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', `${API_BASE}/api/projects/${projectId}/upload`, true)
+
+      // Monitoramento do progresso real
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const percentComplete = (event.loaded / event.total) * 100
+          setUploadProgress(percentComplete)
+          setUploadStatusText(`Enviando mídias: ${Math.round(percentComplete)}%`)
         }
-        setUploadStatusText('Processando mídias recebidas...')
-      }
-      if (progress > 75 && logsList.length < 8) {
-        logsList.push('Gerando chaves UUID e salvando no PostgreSQL...')
-        setUploadStatusText('Salvando informações no banco...')
-      }
-      if (progress > 90 && logsList.length < 9) {
-        logsList.push('Registrando na fila de processamento OpenDroneMap...')
-        logsList.push('Configurando prioridade do Job: IDLE -> QUEUED')
-        setUploadStatusText('Enfileirando tarefa de fotogrametria...')
-      }
-      if (progress === 100) {
-        logsList.push('Concluído com sucesso!')
-        setUploadStatusText('Todos os arquivos foram salvos e integrados.')
       }
 
-      setUploadLogs([...logsList])
-    }, 400)
+      xhr.onload = () => {
+        if (xhr.status === 200) {
+          const response = JSON.parse(xhr.responseText)
+          setUploadLogs((prev) => [
+            ...prev,
+            `Arquivos enviados com sucesso!`,
+            `Status do Storage: ${response.message}`,
+            'Inserindo Job na fila de tarefas...',
+            'Sucesso!',
+          ])
+          setUploadProgress(100)
+          setUploadStatusText('Upload concluído com sucesso.')
+        } else {
+          let errorText = 'Erro no processamento do upload.'
+          try {
+            const errRes = JSON.parse(xhr.responseText)
+            errorText = errRes.detail || errorText
+          } catch (_) {
+            // ignorar
+          }
+          setUploadLogs((prev) => [...prev, `Erro: ${errorText} (Código ${xhr.status})`])
+          setIsUploading(false)
+          setErrorMsg(`Erro ao realizar upload dos arquivos: ${errorText}`)
+        }
+      }
+
+      xhr.onerror = () => {
+        setUploadLogs((prev) => [...prev, 'Erro de conexão/rede ocorrido.'])
+        setIsUploading(false)
+        setErrorMsg('Erro de rede ao tentar fazer upload dos arquivos.')
+      }
+
+      xhr.send(formData)
+
+    } catch (err: any) {
+      console.error(err)
+      setIsUploading(false)
+      setErrorMsg(err.message || 'Ocorreu um erro inesperado ao salvar o projeto.')
+    }
   }
 
   const handleUploadComplete = () => {
-    // Adiciona o novo projeto simulado à lista
-    const newProj: ProjectItem = {
-      id: `proj-${Date.now()}`,
-      name: settings.name,
-      description: settings.description,
-      filesCount: files.length,
-      quality: settings.quality,
-      mode: settings.mode,
-      status: 'queued',
-      createdAt: new Date().toLocaleString('pt-BR'),
-      progress: 0,
-    }
-
+    // Carregar a lista atualizada
+    fetchProjects()
+    
+    // Aguardar e resetar estado
     setTimeout(() => {
-      setProjects((prev) => [newProj, ...prev])
       setIsUploading(false)
       setFiles([])
       setSettings({
@@ -214,11 +236,11 @@ function App() {
           <div className="flex items-center gap-6">
             <div className="hidden sm:flex gap-4 text-xs text-slate-400">
               <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 <span>Banco: Conectado</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                <span className="w-2 h-2 rounded-full bg-indigo-500" />
                 <span>Modo ODM: Demo</span>
               </div>
             </div>
@@ -304,7 +326,7 @@ function App() {
                     className="p-4 rounded-xl bg-slate-950/40 border border-slate-900 hover:border-slate-800 transition-all space-y-3 group"
                   >
                     <div className="flex justify-between items-start">
-                      <div className="space-y-0.5 max-w-[70%]">
+                      <div className="space-y-0.5 max-w-[65%]">
                         <h3 className="text-sm font-semibold text-white truncate group-hover:text-indigo-400 transition-colors">
                           {p.name}
                         </h3>
@@ -313,8 +335,8 @@ function App() {
                         )}
                       </div>
 
-                      {/* Badges */}
-                      <div>
+                      {/* Badge and Delete Action Container */}
+                      <div className="flex items-center gap-2">
                         {p.status === 'completed' && (
                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-semibold uppercase">
                             Concluído
@@ -335,6 +357,29 @@ function App() {
                             Falhou
                           </span>
                         )}
+
+                        {/* Delete Button */}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteProject(p.id)}
+                          className="p-1 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                          title="Excluir Projeto"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            strokeWidth={1.5}
+                            stroke="currentColor"
+                            className="w-4 h-4"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"
+                            />
+                          </svg>
+                        </button>
                       </div>
                     </div>
 
@@ -342,7 +387,7 @@ function App() {
                     <div className="flex items-center gap-4 text-[10px] text-slate-500 font-mono">
                       <div>📁 {p.filesCount} arquivos</div>
                       <div>⚡ Modo: {p.mode === 'both' ? 'Completo' : p.mode === 'mesh' ? '3D' : '2D'}</div>
-                      <div>🕒 {p.createdAt.split(',')[0]}</div>
+                      <div>🕒 {p.createdAt.split(' ')[0]}</div>
                     </div>
 
                     {/* Progress Indicator */}
@@ -375,7 +420,7 @@ function App() {
 
       {/* Footer */}
       <footer className="border-t border-slate-900 bg-slate-950 py-6 text-center text-xs text-slate-500">
-        <p>&copy; {new Date().getFullYear()} DroneMapper. Licenciado sob MIT. Interface responsiva com Tailwind CSS v4.</p>
+        <p>&copy; {new Date().getFullYear()} DroneMapper. Licenciado sob MIT. Interface integrada via HTTP API.</p>
       </footer>
     </div>
   )
