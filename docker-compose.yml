@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: dronemapper_db
+    environment:
+      POSTGRES_USER: dronemapper
+      POSTGRES_PASSWORD: dronemapper_password
+      POSTGRES_DB: dronemapper
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dronemapper"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dronemapper_backend
+    environment:
+      - DATABASE_URL=postgresql://dronemapper:dronemapper_password@db:5432/dronemapper
+      - STORAGE_DIR=/app/storage
+      - ENVIRONMENT=development
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - dronemapper_storage:/app/storage
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: dronemapper_frontend
+    ports:
+      - "8081:80"
+    depends_on:
+      - backend
+
+volumes:
+  db_data:
+  dronemapper_storage:

@@ -1,0 +1,9 @@
+@import "tailwindcss";
+
+/* Qualquer customização global do Tailwind v4 pode ser colocada aqui */
+@layer base {
+  body {
+    @apply bg-slate-950 text-slate-100 antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
