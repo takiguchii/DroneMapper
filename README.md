@@ -35,7 +35,7 @@ graph TD
 
 1. **Dashboard Premium**: Interface responsiva de alta fidelidade com tema escuro (dark mode), efeitos glassmorphism e micro-animações, desenvolvida com React 19, TypeScript e Tailwind CSS v4.
 2. **Upload Inteligente**: Drag-and-drop de múltiplos arquivos simultaneamente (imagens JPEG/PNG e vídeos MP4/MOV) com monitoramento do progresso real através de XMLHttpRequest.
-3. **Validação Rigorosa**: Validação no frontend e backend contra formatos de arquivos não suportados e limitação de tamanho (máximo de 200MB por arquivo).
+3. **Validação Rigorosa**: Validação no frontend e backend contra formatos de arquivos não suportados e limitação de tamanho (máximo de 2GB por arquivo).
 4. **Extração de Quadros (FFMPEG)**: Caso um vídeo seja enviado, o Worker extrai automaticamente os quadros (1 frame por segundo) e os utiliza como fotos de entrada para a fotogrametria.
 5. **Persistência PostgreSQL**: Todos os dados de projetos, contagem de mídias, status e progresso de processamento são persistidos utilizando SQLModel (SQLAlchemy 2.0).
 6. **Fila de Tarefas Assíncrona**: Mecanismo de fila persistente no banco de dados que executa tarefas em segundo plano sem travar a API principal do sistema.

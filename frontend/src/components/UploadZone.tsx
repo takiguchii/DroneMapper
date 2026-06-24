@@ -150,7 +150,7 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
               {isDragActive ? 'Solte seus arquivos aqui...' : 'Arraste e solte seus arquivos ou clique para buscar'}
             </p>
             <p className="text-xs text-slate-500">
-              Formatos suportados: .JPG, .PNG, .MP4, .MOV (Máx 200MB/arquivo)
+              Formatos suportados: .JPG, .PNG, .MP4, .MOV (Máx 2GB/arquivo)
             </p>
           </div>
         </div>

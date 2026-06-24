@@ -189,7 +189,7 @@ def upload_files(project_id: str, files: List[UploadFile] = File(...), db: Sessi
         raise HTTPException(status_code=404, detail="Projeto não encontrado")
     
     allowed_exts = {'jpg', 'jpeg', 'png', 'mp4', 'mov', 'avi', 'mkv'}
-    max_size = 200 * 1024 * 1024  # 200MB
+    max_size = 2 * 1024 * 1024 * 1024  # 2GB
     
     # 1. Validar todos os arquivos primeiro
     for file in files:
@@ -211,7 +211,7 @@ def upload_files(project_id: str, files: List[UploadFile] = File(...), db: Sessi
         if file_size > max_size:
             raise HTTPException(
                 status_code=400,
-                detail=f"O arquivo {file.filename} excede o limite máximo de 200MB."
+                detail=f"O arquivo {file.filename} excede o limite máximo de 2GB."
             )
             
     uploads_dir = os.path.join(PROJECTS_DIR, project_id, "uploads")
