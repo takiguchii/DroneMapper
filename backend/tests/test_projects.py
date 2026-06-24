@@ -3,12 +3,16 @@ import shutil
 import io
 from fastapi.testclient import TestClient
 from sqlmodel import Session, create_engine, SQLModel
+from sqlalchemy.pool import StaticPool
 from main import app, get_session, PROJECTS_DIR
 
-# Configura banco de dados SQLite temporário para testes
-TEST_DB_FILE = "test.db"
-TEST_DATABASE_URL = f"sqlite:///{TEST_DB_FILE}"
-test_engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})
+# Configura banco de dados SQLite em memória com StaticPool para compartilhar conexões no mesmo processo de teste
+TEST_DATABASE_URL = "sqlite:///:memory:"
+test_engine = create_engine(
+    TEST_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool
+)
 
 def override_get_session():
     with Session(test_engine) as session:
@@ -20,9 +24,6 @@ app.dependency_overrides[get_session] = override_get_session
 client = TestClient(app)
 
 def setup_module(module):
-    # Remove DB de teste antigo se existir por segurança
-    if os.path.exists(TEST_DB_FILE):
-        os.remove(TEST_DB_FILE)
     # Inicializa tabelas e diretório temporário
     SQLModel.metadata.create_all(test_engine)
     os.makedirs(PROJECTS_DIR, exist_ok=True)
@@ -32,9 +33,8 @@ def teardown_module(module):
     SQLModel.metadata.drop_all(test_engine)
     if os.path.exists(PROJECTS_DIR):
         shutil.rmtree(PROJECTS_DIR)
-    # Remove o arquivo físico do banco SQLite
-    if os.path.exists(TEST_DB_FILE):
-        os.remove(TEST_DB_FILE)
+    # Limpa o pool do engine
+    test_engine.dispose()
 
 def test_project_lifecycle():
     # Cria o Projeto

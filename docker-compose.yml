@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   db:
     image: postgres:16-alpine
@@ -40,6 +38,25 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dronemapper_worker
+    command: python worker.py
+    environment:
+      - DATABASE_URL=postgresql://dronemapper:dronemapper_password@db:5432/dronemapper
+      - STORAGE_DIR=/app/storage
+      - ENVIRONMENT=development
+    volumes:
+      - ./backend:/app
+      - dronemapper_storage:/app/storage
+    depends_on:
+      db:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
 
   frontend:
     build:
