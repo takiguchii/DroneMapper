@@ -50,7 +50,7 @@ def test_project_lifecycle():
     assert data["name"] == "Mapeamento Canavial"
     assert data["quality"] == "high"
     assert data["mode"] == "ortho"
-    assert data["status"] == "queued"
+    assert data["status"] == "created"  # Status inicial é 'created'
     assert data["progress"] == 0
     assert data["filesCount"] == 0
     assert "id" in data
@@ -86,6 +86,11 @@ def test_project_lifecycle():
     upload_data = response.json()
     assert "2 arquivos salvos" in upload_data["message"]
     assert upload_data["filesCount"] == 2
+
+    # Chamar enfileiramento (process) para mudar status para 'queued'
+    response = client.post(f"/api/projects/{project_id}/process")
+    assert response.status_code == 200
+    assert response.json()["status"] == "queued"
 
     # Verificar física do upload
     uploads_path = os.path.join(PROJECTS_DIR, project_id, "uploads")

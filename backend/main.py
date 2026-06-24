@@ -32,7 +32,7 @@ class Project(SQLModel, table=True):
     description: Optional[str] = ""
     quality: str = "medium"      # low, medium, high
     mode: str = "both"           # mesh, ortho, both
-    status: str = "queued"       # queued, processing, completed, failed
+    status: str = "created"      # created, queued, processing, completed, failed
     createdAt: str
     progress: int = 0
     filesCount: int = 0
@@ -143,7 +143,7 @@ def create_project(project: ProjectCreate, db: Session = Depends(get_session)):
         description=project.description,
         quality=project.quality,
         mode=project.mode,
-        status="queued",
+        status="created",
         createdAt=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         progress=0,
         filesCount=0
@@ -265,3 +265,19 @@ def upload_files(project_id: str, files: List[UploadFile] = File(...), db: Sessi
         "message": f"Upload realizado com sucesso: {saved_count} arquivos salvos",
         "filesCount": db_project.filesCount
     }
+
+@app.post("/api/projects/{project_id}/process", status_code=200)
+def process_project_endpoint(project_id: str, db: Session = Depends(get_session)):
+    """Muda o status do projeto para 'queued' para iniciar o processamento do Worker após upload completo"""
+    db_project = db.get(Project, project_id)
+    if not db_project:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado")
+    if db_project.filesCount == 0:
+        raise HTTPException(status_code=400, detail="Não é possível processar um projeto sem arquivos")
+        
+    db_project.status = "queued"
+    db_project.progress = 0
+    db.add(db_project)
+    db.commit()
+    db.refresh(db_project)
+    return {"message": "Projeto enfileirado com sucesso", "status": "queued"}

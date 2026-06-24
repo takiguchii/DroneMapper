@@ -25,6 +25,7 @@ services:
       - DATABASE_URL=postgresql://dronemapper:dronemapper_password@db:5432/dronemapper
       - STORAGE_DIR=/app/storage
       - ENVIRONMENT=development
+      - PYTHONUNBUFFERED=1
     ports:
       - "8000:8000"
     volumes:
@@ -49,6 +50,7 @@ services:
       - DATABASE_URL=postgresql://dronemapper:dronemapper_password@db:5432/dronemapper
       - STORAGE_DIR=/app/storage
       - ENVIRONMENT=development
+      - PYTHONUNBUFFERED=1
     volumes:
       - ./backend:/app
       - dronemapper_storage:/app/storage
