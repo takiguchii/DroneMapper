@@ -11,32 +11,45 @@ import worker
 worker.engine = test_engine
 
 def test_worker_process_project():
+    project_id = "proj-test-worker"
+
+    # Cria diretório de upload e imagem fake para a reconstrução simulada rodar
+    uploads_dir = os.path.join(PROJECTS_DIR, project_id, "uploads")
+    os.makedirs(uploads_dir, exist_ok=True)
+    with open(os.path.join(uploads_dir, "photo.jpg"), "w") as f:
+        f.write("dummy data")
+
     # Inicializa o banco de testes e insere projeto na fila
     with Session(test_engine) as session:
         SQLModel.metadata.create_all(test_engine)
         
         project = Project(
-            id="proj-test-worker",
+            id=project_id,
             name="Projeto Teste Worker",
             quality="low",
             mode="mesh",
             status="queued",
             createdAt="2026-06-24 10:00:00",
             progress=0,
-            filesCount=3
+            filesCount=1
         )
         session.add(project)
         session.commit()
 
     # Executa a função de processamento de forma síncrona para testar
-    worker.process_project("proj-test-worker")
+    worker.process_project(project_id)
 
     # Verifica se o projeto transitou para 'completed' com progresso 100%
     with Session(test_engine) as session:
-        db_project = session.get(Project, "proj-test-worker")
+        db_project = session.get(Project, project_id)
         assert db_project is not None
         assert db_project.status == "completed"
         assert db_project.progress == 100
+
+    # Limpa arquivos criados
+    proj_dir = os.path.join(PROJECTS_DIR, project_id)
+    if os.path.exists(proj_dir):
+        shutil.rmtree(proj_dir)
 
 def test_worker_video_frame_extraction():
     project_id = "proj-video-test"
@@ -67,10 +80,8 @@ def test_worker_video_frame_extraction():
 
     # Mock de subprocess.run do FFMPEG
     def mock_ffmpeg_run(cmd, *args, **kwargs):
-        # O último argumento é o padrão de saída: frame_test_flight_%04d.jpg
         output_pattern = cmd[-1]
         dir_name = os.path.dirname(output_pattern)
-        # Extrai o nome base
         base_name = "frame_test_flight"
         # Cria 3 imagens fake
         for i in range(1, 4):
