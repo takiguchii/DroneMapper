@@ -106,3 +106,26 @@ def test_project_lifecycle():
     response = client.get("/api/projects")
     assert response.status_code == 200
     assert len(response.json()) == 0
+
+def test_upload_validation():
+    # 1. Criar projeto de teste
+    payload = {
+        "name": "Projeto Validacao",
+        "quality": "low",
+        "mode": "both"
+    }
+    response = client.post("/api/projects", json=payload)
+    assert response.status_code == 201
+    project_id = response.json()["id"]
+
+    # 2. Tentar upload de arquivo com extensão inválida (.txt)
+    file_invalid = ("test.txt", io.BytesIO(b"dados de texto falsos"), "text/plain")
+    response = client.post(
+        f"/api/projects/{project_id}/upload",
+        files=[("files", file_invalid)]
+    )
+    assert response.status_code == 400
+    assert "Extensão do arquivo test.txt não suportada" in response.json()["detail"]
+
+    # Limpar projeto de teste
+    client.delete(f"/api/projects/{project_id}")
