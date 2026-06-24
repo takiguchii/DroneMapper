@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from fastapi import FastAPI, HTTPException, UploadFile, File, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlmodel import SQLModel, Field, Session, create_engine, select
 
@@ -55,6 +56,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Servir arquivos estáticos do storage
+app.mount("/api/storage", StaticFiles(directory=STORAGE_DIR), name="storage")
 
 # Pydantic Schemas para validação da API
 class ProjectCreate(BaseModel):

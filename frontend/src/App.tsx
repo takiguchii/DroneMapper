@@ -3,6 +3,7 @@ import { ProjectForm } from './components/ProjectForm'
 import type { ProjectSettings } from './components/ProjectForm'
 import { UploadZone } from './components/UploadZone'
 import { ProgressBar } from './components/ProgressBar'
+import { ModelViewer } from './components/ModelViewer'
 
 interface ProjectItem {
   id: string
@@ -29,6 +30,9 @@ function App() {
   })
   const [projects, setProjects] = useState<ProjectItem[]>([])
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  // Visualizador 3D State
+  const [viewerProject, setViewerProject] = useState<ProjectItem | null>(null)
 
   // Upload/Process States
   const [isUploading, setIsUploading] = useState(false)
@@ -84,6 +88,9 @@ function App() {
       })
       if (res.ok) {
         setProjects((prev) => prev.filter((p) => p.id !== id))
+        if (viewerProject?.id === id) {
+          setViewerProject(null)
+        }
       } else {
         const errData = await res.json()
         setErrorMsg(errData.detail || 'Erro ao excluir o projeto do servidor.')
@@ -409,6 +416,20 @@ function App() {
                         />
                       </div>
                     </div>
+
+                    {/* Visualizar 3D Button for Completed Projects */}
+                    {p.status === 'completed' && (
+                      <button
+                        type="button"
+                        onClick={() => setViewerProject(p)}
+                        className="w-full py-2 rounded-lg bg-indigo-600/10 hover:bg-indigo-600 text-indigo-400 hover:text-white border border-indigo-600/20 hover:border-indigo-600 font-semibold text-[10px] transition-all cursor-pointer flex items-center justify-center gap-1.5 mt-2"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+                        </svg>
+                        <span>Visualizar Modelo 3D</span>
+                      </button>
+                    )}
                   </div>
                 ))
               )}
@@ -417,6 +438,15 @@ function App() {
         </div>
 
       </main>
+
+      {/* 3D Model Viewer Modal */}
+      {viewerProject && (
+        <ModelViewer
+          projectName={viewerProject.name}
+          modelUrl={`${API_BASE}/api/storage/projects/${viewerProject.id}/outputs/model.obj`}
+          onClose={() => setViewerProject(null)}
+        />
+      )}
 
       {/* Footer */}
       <footer className="border-t border-slate-900 bg-slate-950 py-6 text-center text-xs text-slate-500">
