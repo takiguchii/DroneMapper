@@ -12,7 +12,7 @@ interface ProjectItem {
   filesCount: number
   quality: 'low' | 'medium' | 'high'
   mode: 'mesh' | 'ortho' | 'both'
-  status: 'queued' | 'processing' | 'completed' | 'failed'
+  status: 'created' | 'queued' | 'processing' | 'completed' | 'failed'
   createdAt: string
   progress: number
 }
@@ -33,6 +33,9 @@ function App() {
 
   // Visualizador 3D State
   const [viewerProject, setViewerProject] = useState<ProjectItem | null>(null)
+
+  // Rastrear projeto ativo enviado pelo usuário nesta sessão para abrir o 3D automaticamente
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
 
   // Upload/Process States
   const [isUploading, setIsUploading] = useState(false)
@@ -61,6 +64,22 @@ function App() {
     const interval = setInterval(fetchProjects, 5000)
     return () => clearInterval(interval)
   }, [])
+
+  // Monitorar projeto ativo e abrir visualizador 3D automaticamente quando concluído
+  useEffect(() => {
+    if (activeProjectId) {
+      const activeProj = projects.find((p) => p.id === activeProjectId)
+      if (activeProj) {
+        if (activeProj.status === 'completed') {
+          setViewerProject(activeProj)
+          setActiveProjectId(null)
+        } else if (activeProj.status === 'failed') {
+          setErrorMsg(`O processamento do projeto "${activeProj.name}" falhou. Verifique se os arquivos de mídia são válidos.`)
+          setActiveProjectId(null)
+        }
+      }
+    }
+  }, [projects, activeProjectId])
 
   // File Handlers
   const handleFilesAdded = (newFiles: File[]) => {
@@ -118,7 +137,7 @@ function App() {
     setUploadStatusText('Registrando projeto...')
 
     try {
-      // 1. Criar o Projeto
+      // 1. Criar o Projeto (Status inicial: 'created')
       const createRes = await fetch(`${API_BASE}/api/projects`, {
         method: 'POST',
         headers: {
@@ -139,6 +158,7 @@ function App() {
 
       const projectData = await createRes.json()
       const projectId = projectData.id
+      setActiveProjectId(projectId) // Monitorar este projeto para auto-abrir 3D
 
       setUploadLogs((prev) => [
         ...prev,
@@ -160,23 +180,46 @@ function App() {
       xhr.upload.onprogress = (event) => {
         if (event.lengthComputable) {
           const percentComplete = (event.loaded / event.total) * 100
-          setUploadProgress(percentComplete)
+          setUploadProgress(percentComplete * 0.95) // Guarda os últimos 5% para a chamada do enfileiramento
           setUploadStatusText(`Enviando mídias: ${Math.round(percentComplete)}%`)
         }
       }
 
-      xhr.onload = () => {
+      xhr.onload = async () => {
         if (xhr.status === 200) {
           const response = JSON.parse(xhr.responseText)
           setUploadLogs((prev) => [
             ...prev,
             `Arquivos enviados com sucesso!`,
             `Status do Storage: ${response.message}`,
-            'Inserindo Job na fila de tarefas...',
-            'Sucesso!',
+            'Enfileirando projeto para processamento...',
           ])
-          setUploadProgress(100)
-          setUploadStatusText('Upload concluído com sucesso.')
+          setUploadStatusText('Enfileirando tarefa...')
+
+          try {
+            // 3. Enfileirar o projeto após upload concluído com sucesso
+            const processRes = await fetch(`${API_BASE}/api/projects/${projectId}/process`, {
+              method: 'POST',
+            })
+
+            if (processRes.ok) {
+              setUploadLogs((prev) => [
+                ...prev,
+                'Projeto adicionado com sucesso na fila de reconstrução!',
+                'Sucesso!',
+              ])
+              setUploadProgress(100)
+              setUploadStatusText('Upload e enfileiramento concluídos.')
+            } else {
+              const errData = await processRes.json()
+              throw new Error(errData.detail || 'Erro ao enfileirar projeto.')
+            }
+          } catch (err: any) {
+            setUploadLogs((prev) => [...prev, `Erro ao enfileirar: ${err.message}`])
+            setIsUploading(false)
+            setErrorMsg(`Erro ao iniciar processamento: ${err.message}`)
+          }
+
         } else {
           let errorText = 'Erro no processamento do upload.'
           try {
@@ -355,8 +398,13 @@ function App() {
                           </span>
                         )}
                         {p.status === 'queued' && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-400 font-semibold uppercase">
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-400 font-semibold uppercase animate-pulse">
                             Na Fila
+                          </span>
+                        )}
+                        {p.status === 'created' && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-slate-500 font-semibold uppercase">
+                            Criado
                           </span>
                         )}
                         {p.status === 'failed' && (
