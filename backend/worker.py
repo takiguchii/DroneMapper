@@ -51,14 +51,17 @@ def extract_video_frames(project_id: str, uploads_dir: str) -> int:
         ]
         
         try:
-            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             shutil.move(video_path, dest_video_path)
             
             extracted_frames = glob.glob(os.path.join(uploads_dir, f"frame_{video_name}_*.jpg"))
             extracted_total += len(extracted_frames)
             print(f"[*] FFMPEG concluiu: extraídos {len(extracted_frames)} frames de {video_basename}")
+        except subprocess.CalledProcessError as e:
+            print(f"[!] Erro ao processar ffmpeg para {video_basename}. Retorno: {e.returncode}")
+            print(f"[!] FFmpeg Stderr: {e.stderr}")
         except Exception as e:
-            print(f"[!] Erro ao processar ffmpeg para {video_basename}: {e}")
+            print(f"[!] Erro genérico ao processar ffmpeg para {video_basename}: {e}")
             
     return extracted_total
 
