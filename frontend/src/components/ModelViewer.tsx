@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
+import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 
 interface ModelViewerProps {
@@ -99,58 +100,101 @@ export const ModelViewer: React.FC<ModelViewerProps> = ({
     };
     resetCameraRef.current = resetCamera
 
-    // 6. Carregar Modelo OBJ
-    const loader = new OBJLoader()
+    // 6. Carregar Modelo OBJ e MTL
+    const objLoader = new OBJLoader()
+    const mtlLoader = new MTLLoader()
     setIsLoading(true)
     setError(null)
 
-    loader.load(
-      modelUrl,
-      (obj) => {
-        loadedObject = obj
+    const basePath = modelUrl.substring(0, modelUrl.lastIndexOf('/') + 1)
+    const mtlUrl = modelUrl.replace('.obj', '.mtl')
+    const mtlFileName = mtlUrl.split('/').pop() || 'model.mtl'
 
-        // Ajustar materiais padrão caso não haja MTL associado
-        obj.traverse((child) => {
-          if (child instanceof THREE.Mesh) {
-            child.material = new THREE.MeshStandardMaterial({
-              color: 0xa5b4fc, // Indigo-300
-              roughness: 0.4,
-              metalness: 0.1,
-              flatShading: true,
-              side: THREE.DoubleSide
+    const loadOBJ = (materials?: MTLLoader.MaterialCreator) => {
+      if (materials) {
+        materials.preload()
+        objLoader.setMaterials(materials)
+      }
+
+      objLoader.load(
+        modelUrl,
+        (obj) => {
+          loadedObject = obj
+
+          // Ajustar materiais caso não haja MTL
+          if (!materials) {
+            obj.traverse((child) => {
+              if (child instanceof THREE.Mesh) {
+                child.material = new THREE.MeshStandardMaterial({
+                  color: 0xa5b4fc, // Indigo-300
+                  roughness: 0.4,
+                  metalness: 0.1,
+                  flatShading: true,
+                  side: THREE.DoubleSide
+                })
+              }
             })
-            child.castShadow = true
-            child.receiveShadow = true
+          } else {
+            // Garantir double sided para materiais com textura
+            obj.traverse((child) => {
+              if (child instanceof THREE.Mesh && child.material) {
+                if (Array.isArray(child.material)) {
+                  child.material.forEach((m) => (m.side = THREE.DoubleSide))
+                } else {
+                  child.material.side = THREE.DoubleSide
+                }
+              }
+            })
           }
-        })
 
-        // Centralizar o objeto na cena
-        const box = new THREE.Box3().setFromObject(obj)
-        const center = box.getCenter(new THREE.Vector3())
-        obj.position.sub(center) // Move o centro do modelo para (0,0,0)
-        
-        // Reposicionar o grid ligeiramente abaixo do menor ponto do modelo
-        const newBox = new THREE.Box3().setFromObject(obj)
-        gridHelper.position.y = newBox.min.y - 0.1
+          // Ativar sombras
+          obj.traverse((child) => {
+            if (child instanceof THREE.Mesh) {
+              child.castShadow = true
+              child.receiveShadow = true
+            }
+          })
 
-        scene.add(obj)
-        setIsLoading(false)
-        
-        // Focar a câmera
-        resetCamera()
-      },
-      (xhr) => {
-        if (xhr.total > 0) {
-          setLoadingProgress((xhr.loaded / xhr.total) * 100)
-        } else {
-          // Fallback se lengthComputable for falso
-          setLoadingProgress((prev) => Math.min(prev + 5, 95))
+          // Centralizar o objeto na cena
+          const box = new THREE.Box3().setFromObject(obj)
+          const center = box.getCenter(new THREE.Vector3())
+          obj.position.sub(center) // Move o centro do modelo para (0,0,0)
+          
+          // Reposicionar o grid ligeiramente abaixo do menor ponto do modelo
+          const newBox = new THREE.Box3().setFromObject(obj)
+          gridHelper.position.y = newBox.min.y - 0.1
+
+          scene.add(obj)
+          setIsLoading(false)
+          
+          // Focar a câmera
+          resetCamera()
+        },
+        (xhr) => {
+          if (xhr.total > 0) {
+            setLoadingProgress((xhr.loaded / xhr.total) * 100)
+          } else {
+            setLoadingProgress((prev) => Math.min(prev + 5, 95))
+          }
+        },
+        (err) => {
+          console.error('Erro ao carregar modelo 3D OBJ:', err)
+          setError('Não foi possível renderizar o arquivo 3D. Certifique-se de que o arquivo model.obj é válido.')
+          setIsLoading(false)
         }
+      )
+    }
+
+    mtlLoader.setPath(basePath)
+    mtlLoader.load(
+      mtlFileName,
+      (materials) => {
+        loadOBJ(materials)
       },
+      undefined,
       (err) => {
-        console.error('Erro ao carregar modelo 3D:', err)
-        setError('Não foi possível renderizar o arquivo 3D. Certifique-se de que o arquivo model.obj é válido.')
-        setIsLoading(false)
+        console.warn('Arquivo MTL não encontrado ou erro ao carregar, caindo para fallback sem textura', err)
+        loadOBJ()
       }
     )
 
