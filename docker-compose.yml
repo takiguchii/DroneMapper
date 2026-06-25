@@ -51,6 +51,8 @@ services:
       - STORAGE_DIR=/app/storage
       - ENVIRONMENT=development
       - PYTHONUNBUFFERED=1
+      - ODM_URL=http://node-odm:3000
+      - USE_MOCK_MODEL=false
     volumes:
       - ./backend:/app
       - dronemapper_storage:/app/storage
@@ -59,6 +61,14 @@ services:
         condition: service_healthy
       backend:
         condition: service_healthy
+
+  node-odm:
+    image: opendronemap/nodeodm
+    container_name: dronemapper_nodeodm
+    ports:
+      - "3000:3000"
+    volumes:
+      - nodeodm_data:/var/www/data
 
   frontend:
     build:
@@ -73,3 +83,4 @@ services:
 volumes:
   db_data:
   dronemapper_storage:
+  nodeodm_data:

@@ -9,6 +9,8 @@ import worker
 
 # Aponta o motor do worker para o banco de testes em memória
 worker.engine = test_engine
+# Força o fallback para o modo simulado nos testes isolados
+worker.USE_MOCK_MODEL = True
 
 def test_worker_process_project():
     project_id = "proj-test-worker"
