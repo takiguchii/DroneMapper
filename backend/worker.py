@@ -17,6 +17,7 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://dronemapper:dronemapper_p
 engine = create_engine(DATABASE_URL)
 
 ODM_URL = os.getenv("ODM_URL")  # Ex: http://node-odm:3000
+USE_MOCK_MODEL = os.getenv("USE_MOCK_MODEL", "false").lower() == "true"
 
 def extract_video_frames(project_id: str, uploads_dir: str) -> int:
     """Procura por vídeos e extrai seus frames usando ffmpeg (1 frame por segundo)"""
@@ -81,7 +82,7 @@ def run_odm_reconstruction(project_id: str, uploads_dir: str, mode: str, progres
         return False
 
     # 2. Executa Integração Real se a URL do Node-ODM estiver disponível
-    if ODM_URL:
+    if ODM_URL and not USE_MOCK_MODEL:
         print(f"[*] Modo ODM Real ativado via Node-ODM API: {ODM_URL}")
         try:
             # Prepara payload com as imagens
@@ -170,9 +171,14 @@ def run_odm_reconstruction(project_id: str, uploads_dir: str, mode: str, progres
                         return False
 
         except Exception as e:
-            print(f"[!] Erro ao se conectar com Node-ODM: {e}. Executando modo simulado...")
+            print(f"[!] Erro ao se conectar com Node-ODM: {e}.")
+            return False
 
     # 3. Modo Simulado / Fallback
+    if not USE_MOCK_MODEL:
+        print("[!] Reconstrução simulada desabilitada e modo real falhou/não configurado.")
+        return False
+        
     print("[*] Inicializando Modo Simulado do OpenDroneMap...")
     steps = [
         ("Estrutura do Movimento (SfM) - Estimando posições das câmeras...", 15),
