@@ -102,14 +102,19 @@ def run_odm_reconstruction(project_id: str, uploads_dir: str, mode: str, progres
             # Inicia tarefa no Node-ODM
             with httpx.Client(timeout=None) as client:
                 print("[*] Enviando mídias para o container do Node-ODM...")
-                data = {"options": str(options)}
+                import json
+                data = {"options": json.dumps(options)}
                 response = client.post(f"{ODM_URL}/task/new", files=files_payload, data=data)
 
-                if response.status_code != 200:
+                if response.status_code != 200 or "error" in response.json():
                     print(f"[!] Falha ao submeter tarefa para o Node-ODM: {response.text}")
                     return False
 
                 task_uuid = response.json().get("uuid")
+                if not task_uuid:
+                    print(f"[!] Falha: UUID não retornado. Resposta: {response.text}")
+                    return False
+                    
                 print(f"[*] Tarefa criada no Node-ODM. UUID: {task_uuid}")
 
                 # Monitora tarefa (Polling)
