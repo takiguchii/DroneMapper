@@ -66,7 +66,7 @@ def extract_video_frames(project_id: str, uploads_dir: str) -> int:
             
     return extracted_total
 
-def run_odm_reconstruction(project_id: str, uploads_dir: str, mode: str, progress_callback) -> bool:
+def run_odm_reconstruction(project_id: str, uploads_dir: str, mode: str, quality: str, progress_callback) -> bool:
     """Executa a reconstrução 3D via API do Node-ODM ou executa uma simulação estruturada"""
     outputs_dir = os.path.join(PROJECTS_DIR, project_id, "outputs")
     os.makedirs(outputs_dir, exist_ok=True)
@@ -98,6 +98,17 @@ def run_odm_reconstruction(project_id: str, uploads_dir: str, mode: str, progres
                 {"name": "mesh", "value": "true" if mode in ["mesh", "both"] else "false"},
                 {"name": "dsm", "value": "true"}
             ]
+
+            # Parâmetros agressivos para otimização em hardwares fracos caso qualidade seja "low"
+            if quality == "low":
+                options.extend([
+                    {"name": "resize-to", "value": "800"},         # Redimensiona fotos para 800px (acelera tudo drasticamente)
+                    {"name": "feature-quality", "value": "lowest"}, # Extração rápida de features
+                    {"name": "pc-quality", "value": "lowest"},      # Nuvem de pontos pouco densa
+                    {"name": "mesh-size", "value": "50000"},        # Malha 3D mais simples
+                    {"name": "mesh-octree-depth", "value": "8"},    # Profundidade menor na reconstrução 3D
+                    {"name": "fast-orthophoto", "value": "true"}    # Otimiza o passo de ortofoto caso ativado
+                ])
 
             # Inicia tarefa no Node-ODM
             with httpx.Client(timeout=None) as client:
@@ -240,6 +251,7 @@ def process_project(project_id: str):
             session.add(project)
             session.commit()
             mode = project.mode
+            quality = project.quality
 
         uploads_dir = os.path.join(PROJECTS_DIR, project_id, "uploads")
         
@@ -264,7 +276,7 @@ def process_project(project_id: str):
                     session.add(project)
                     session.commit()
 
-        success = run_odm_reconstruction(project_id, uploads_dir, mode, update_progress)
+        success = run_odm_reconstruction(project_id, uploads_dir, mode, quality, update_progress)
         
         with Session(engine) as session:
             project = session.get(Project, project_id)
